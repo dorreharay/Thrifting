@@ -11,6 +11,10 @@ const emptyElem = `<div class="modal-row__checkbox empty"></div>`
 const progressSteps = {
   initialSteps: [
     {
+      title: 'Fetched message data',
+      elem: emptyElem
+    },
+    {
       title: 'Message & Price Copied',
       elem: emptyElem
     },

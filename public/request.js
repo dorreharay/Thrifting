@@ -22,6 +22,8 @@ export async function getAuthParams(url) {
   const dynamicRules = rules?.data
 
   const x_bc = localStorage.getItem('bcTokenSha')
+  const revision = localStorage.getItem('initObject')
+  const xRev = revision ? JSON?.parse?.(revision)?.revision : ''
 
   const auth_id = await getUserId()
 
@@ -35,6 +37,7 @@ export async function getAuthParams(url) {
     //   'en,es;q=0.9,en-US;q=0.8,uk;q=0.7,pl;q=0.6,lt;q=0.5'
     auth['App-Token'] = dynamicRules?.app_token
     auth['X-Bc'] = x_bc
+    auth['X-Of-Rev'] = xRev
     auth['User-Id'] = id
 
     return { id, auth }

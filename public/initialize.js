@@ -8,8 +8,21 @@ import {
 } from './progress.js'
 import { getAuthParams } from './request.js'
 
+axios.defaults.paramsSerializer = function (params) {
+  const entries = Object.entries(params)
+
+  const urlParams = new URLSearchParams()
+
+  entries?.forEach(item => {
+    urlParams.append(item?.[0], encodeURIComponent(item?.[1]))
+  })
+
+  return urlParams.toString()
+}
+
 const disableOrigination = true
 
+let currentMessageData = null
 let prevDate = null
 let isUnsentTab = false
 let list = []
@@ -127,31 +140,24 @@ export function initThrifting() {
                 waitForPage({
                   selector: '.table-vs__tr__outer',
                   callback: () => {
+                    insertHeading()
+
                     runThriftObserver()
                   }
                 })
-
-                if (unsentList?.length) {
-                  list = unsentList
-                } else {
-                  const list1 = await getStatsList({
-                    offset: 0,
-                    type: 'unsent'
-                  })
-                  list = list1?.list
-                }
               }
 
               if (button?.textContent === ' Sent ') {
                 isUnsentTab = false
+
                 waitForPage({
                   selector: '.table-vs__tr__outer',
                   callback: () => {
+                    insertHeading()
+
                     runThriftObserver()
                   }
                 })
-
-                list = sentList
               }
             })
           }
@@ -180,7 +186,7 @@ export function initThrifting() {
             buttonsContainer?.appendChild(duplicateButton)
 
             duplicateButton.addEventListener('click', async () => {
-              insertNameEntry(0, true)
+              insertNameEntry(true)
 
               handleThriftClick()
             })
@@ -197,12 +203,6 @@ export function initThrifting() {
     waitForPage({
       selector: '.m-schedule',
       callback: () => {
-        // const scheduleContainer = document.querySelector('.m-schedule')
-        // const cancelButton = scheduleContainer.querySelector(
-        //   '.b-dropzone__preview__delete'
-        // )
-        // cancelButton.click()
-
         const messageTextElem = document.querySelector('#new_post_text_input')
 
         if (messageTextElem) {
@@ -335,25 +335,24 @@ function decodeToRegular(text) {
   return text.replace(/[^a-zA-Z ]/g, '').replace(/ /g, '')
 }
 
-const listenThriftClicks = e => {
+const listenThriftClicks = async e => {
   const id = e?.target?.id
 
   if (id === 'thrift') {
-    if (!isUnsentTab && !sentList?.length) return
-    if (isUnsentTab && !unsentList?.length) return
-
     const row = e?.target?.parentElement?.parentElement
     const text = row?.querySelector('.g-truncated-text')
     const content = text?.innerText
+
+    const cells = row?.childNodes
+    const dateCellContent = cells?.[0]?.innerText?.trim?.()
+
+    updateStep(0)
 
     let index = list?.findIndex(
       item =>
         decodeToRegular(decodeHTMLEntities(item?.textCropped)) ===
         decodeToRegular(content)
     )
-
-    const cells = row?.childNodes
-    const dateCellContent = cells?.[0]?.innerText?.trim?.()
 
     if (index === -1) {
       index = list?.findIndex(item => {
@@ -363,14 +362,29 @@ const listenThriftClicks = e => {
       })
     }
 
-    console.log('index 2', list, list?.[index])
-
     if (index === -1) {
       alert(
         "For some reason, our tool cannot thrift this message. Please help dev team by sharing on Slack the account as well as exact message & timestamp. If you don't hear back from us in 1 day, go ahead and thrift the message conventionally."
       )
+
+      const usernameTag = document.querySelector('.g-user-username')
+      const creator = usernameTag ? usernameTag?.innerText.replace('@', '') : ''
+
+      saveThriftError({
+        creator_username: creator,
+        error_message: "Can't find message index",
+        error_type: 'lost_index',
+        messages_list: list?.map(item => item?.textCropped),
+        messages_list_length: list?.length,
+        message_content: content,
+        message_date: dateCellContent
+      })
+      resetSteps()
+      removeStatusWindow()
       return
     }
+
+    currentMessageData = list?.[index]
 
     const modal = document.createElement('div')
     modal.id = 'thrift-modal'
@@ -397,7 +411,6 @@ const listenThriftClicks = e => {
                   id="thrift-close"
                   type="button"
                   class="g-btn m-flat m-btn-gaps m-reset-width"
-                  data-index=${index}
                 >
                   Cancel
                 </button>
@@ -406,7 +419,6 @@ const listenThriftClicks = e => {
                   id="thrift-no-exclusion"
                   type="button"
                   class="g-btn m-flat m-btn-gaps m-reset-width"
-                  data-index=${index}
                 >
                   No Exclusion
                 </button>
@@ -415,14 +427,12 @@ const listenThriftClicks = e => {
                   id="thrift-no"
                   type="button"
                   class="g-btn m-flat m-btn-gaps m-reset-width"
-                  data-index=${index}
                 >
                  Create new
                 </button>
                 <button
                   id="thrift-yes"
                   class="g-btn m-flat m-btn-gaps m-reset-width"
-                  data-index=${index}
                 >
                  Use Existing
                 </button>
@@ -455,21 +465,18 @@ const listenThriftClicks = e => {
   }
 
   if (id === 'thrift-no') {
-    const index = e.target.dataset.index
-    insertNameEntry(index)
+    insertNameEntry()
 
     modal.remove()
   }
 
   if (id === 'thrift-yes') {
-    const index = e.target.dataset.index
-    performReThrifting(index)
+    performReThrifting()
 
     modal.remove()
   }
 
   if (id === 'thrift-entry-next') {
-    const index = e.target.dataset.index
     const input = entry.querySelector('#thrift-name-entry')
 
     const value = input?.value
@@ -483,7 +490,7 @@ const listenThriftClicks = e => {
       return
     }
 
-    handleNewThrift(index, value)
+    handleNewThrift(value)
   }
 
   if (id === 'thrift-entry-new-next') {
@@ -516,11 +523,10 @@ const listenThriftClicks = e => {
   }
 
   if (id === 'thrift-selector-item' || id === 'thrift-no-exclusion') {
-    const index = e.target.dataset.index
     const name = e.target.dataset.name
     const listId = e.target.dataset.listid
 
-    handleReThrift(name, index, listId, id === 'thrift-no-exclusion')
+    handleReThrift(name, listId, id === 'thrift-no-exclusion')
 
     modal.remove()
   }
@@ -650,46 +656,6 @@ const performSaveToListAndFolder = async (
       const buyerIds = buyers?.map(item => item?.id)
 
       await addBuyersToList(listId, messageId, buyerIds)
-
-      // const selectedListUsers = await getFullList(getExclusionList, { listId })
-
-      // const filteredBuyers = buyers?.filter(buyer => {
-      //   const match = selectedListUsers?.find(
-      //     listUser => listUser?.id == buyer?.id
-      //   )
-
-      //   return !match
-      // })
-
-      // const buyerIds = filteredBuyers?.map(item => item?.id)
-
-      // if (filteredBuyers?.length) {
-      //   const errorIds = await addUsersToExclusionList(listId, buyerIds)
-
-      //   if (errorIds?.length) {
-      //     const filteredIdsWithoutErrors = buyerIds?.filter(
-      //       id => !errorIds?.includes(id)
-      //     )
-
-      //     if (filteredIdsWithoutErrors?.length) {
-      //       await addUsersToExclusionList(
-      //         listId,
-      //         filteredIdsWithoutErrors,
-      //         true
-      //       )
-      //     }
-
-      //     saveThriftError({
-      //       creator_username: message?.fromUser?.username,
-      //       user_id: message?.fromUser?.id,
-      //       message_id: message?.id,
-      //       message_copy: message?.text,
-      //       error_message: `Failed to add ids: ${errorIds?.join(', ')}`,
-      //       error_type: 'cannot_add_users_to_exclusion_list',
-      //       fan_ids: errorIds?.join(', ')
-      //     })
-      //   }
-      // }
     }
 
     const defaultListIds = await getDefaultListIds()
@@ -733,25 +699,17 @@ const addBuyersToList = async (listId, messageId, buyerIds) => {
   } catch (error) {}
 }
 
-const handleNewThrift = async (index, name) => {
+const handleNewThrift = async name => {
   try {
-    const messageId = list?.[index]?.id
-    // const purchasedCount = list?.[index]?.purchasedCount
-
-    // if (!purchasedCount) {
-    //   removeStatusWindow()
-    //   resetSteps()
-    //   alert('No past buyers')
-    //   return
-    // }
+    const messageId = currentMessageData?.id
 
     resetSteps()
 
-    updateStep(1)
+    updateStep(2)
 
     const mess = await getMessageData(messageId)
 
-    var message = { ...mess, ...list?.[index] }
+    var message = { ...mess, ...currentMessageData }
 
     const existingLists = await findExclusionList(name)
     const hasDuplicate = existingLists?.find(item => item?.name === name)
@@ -766,13 +724,7 @@ const handleNewThrift = async (index, name) => {
     const { vaultFolder, buyerIds, listId, defaultListIds } =
       await performSaveToListAndFolder(name, messageId, message, false)
 
-    let exclusionListInfo = { name: 'No Exclusion' }
-
-    if (!skipExlusionAndBuyers) {
-      exclusionListInfo = await getExclusionListInfo({ listId })
-    }
-
-    updateStep(2)
+    updateStep(3)
 
     // await handleUnsend(messageId)
 
@@ -797,9 +749,10 @@ const handleNewThrift = async (index, name) => {
       ...payload,
       message,
       buyerIds,
-      vault_folder_name: vaultFolder?.name || exclusionListInfo?.name,
+      vault_folder_name: name,
       vault_folder_id: vaultFolder?.id,
-      exclusion_list_name: exclusionListInfo?.name
+      exclusion_list_name: name,
+      user_agent: navigator?.userAgent
     })
 
     await createScheduledMessage(payload)
@@ -809,6 +762,18 @@ const handleNewThrift = async (index, name) => {
     alert(
       'Failed to thrift the message. Please see the log in the network tab.'
     )
+
+    saveThriftError({
+      creator_username: message?.fromUser?.username,
+      user_id: message?.fromUser?.id,
+      message_id: message?.id,
+      message_copy: message?.text,
+      error_message: error?.message,
+      error_type: 'failed_to_thrift',
+      user_agent: navigator?.userAgent,
+      error_request_body: error?.config,
+      error_response_body: error?.response
+    })
     console.log('error - handleHandleNewThrift', error)
   }
 }
@@ -876,31 +841,17 @@ const saveMassMessageLog = async payload => {
   }
 }
 
-const handleReThrift = async (
-  name,
-  index,
-  listId,
-  skipExlusionAndBuyers = false
-) => {
+const handleReThrift = async (name, listId, skipExlusionAndBuyers = false) => {
   try {
-    const messageId = list?.[index]?.id
-
-    // const purchasedCount = list?.[index]?.purchasedCount
-
-    // if (!purchasedCount) {
-    //   removeStatusWindow()
-    //   resetSteps()
-    //   alert('No past buyers')
-    //   return
-    // }
+    const messageId = currentMessageData?.id
 
     resetSteps()
 
-    updateStep(1)
+    updateStep(2)
 
     const mess = await getMessageData(messageId)
 
-    var message = { ...mess, ...list?.[index] }
+    var message = { ...mess, ...currentMessageData }
 
     const { vaultFolder, buyerIds, defaultListIds } =
       await performSaveToListAndFolder(
@@ -918,7 +869,7 @@ const handleReThrift = async (
       exclusionListInfo = await getExclusionListInfo({ listId })
     }
 
-    updateStep(2)
+    updateStep(3)
 
     // await handleUnsend(messageId)
 
@@ -950,6 +901,7 @@ const handleReThrift = async (
 
     await createScheduledMessage(payload)
   } catch (error) {
+    console.log('test', error, error?.response, error?.config)
     removeStatusWindow()
     resetSteps()
     alert(
@@ -962,7 +914,10 @@ const handleReThrift = async (
       message_id: message?.id,
       message_copy: message?.text,
       error_message: error?.message,
-      error_type: 'failed_to_thrift'
+      error_type: 'failed_to_thrift',
+      user_agent: navigator?.userAgent,
+      error_request_body: error?.config,
+      error_response_body: error?.response
     })
 
     console.log('error - handleReThrift', error)
@@ -1100,10 +1055,14 @@ const searchForVaultCollection = async query => {
   }
 }
 
-const getStatsList = async ({ offset, type }) => {
-  const url = `/api2/v2/messages/queue/stats?limit=100&offset=${offset * 100}${
+const getStatsList = async ({ offset, type = 'sent', query }) => {
+  const formattedQuery = query
+    ? encodeURIComponent(query.trim()).replaceAll("'", '%27')
+    : ''
+
+  const url = `/api2/v2/messages/queue/stats?offset=${offset * 100}&limit=100${
     type ? `&type=${type}` : ''
-  }&format=infinite`
+  }${query ? `&query=${formattedQuery}` : ''}&format=infinite&list=all`
 
   try {
     const authParams = await getAuthParams(url)
@@ -1120,38 +1079,7 @@ const getStatsList = async ({ offset, type }) => {
   }
 }
 
-// const getStats = async () => {
-//   const url = `/api2/v2/messages/queue/stats`
-
-//   try {
-//     const authParams = await getAuthParams(url)
-
-//     const data = await axios.get(`https://onlyfans.com${url}`, {
-//       headers: authParams
-//     })
-
-//     return data?.data
-//   } catch (error) {
-//     console.log('error', error)
-
-//     return Promise.reject(error)
-//   }
-// }
-
-// getStats()
-
-// const handleUnsend = async (id) => {
-//   const navBar = document.querySelector('.b-tabs__nav')
-
-//   const links = navBar.querySelectorAll('.b-tabs__nav__item')
-
-//   await unsendMessage(id)
-
-//   links?.[1].click()
-//   links?.[0].click()
-// }
-
-const insertNameEntry = (index, skip) => {
+const insertNameEntry = skip => {
   const modal = document.createElement('div')
   modal.id = 'thrift-entry'
   modal.innerHTML = `<div style="position: absolute; z-index: 1040;">
@@ -1212,7 +1140,6 @@ const insertNameEntry = (index, skip) => {
                 <button
                   id="${skip ? 'thrift-entry-new-next' : 'thrift-entry-next'}"
                   class="g-btn m-flat m-btn-gaps m-reset-width"
-                  data-index=${index}
                 >
                   Next
                 </button>
@@ -1233,7 +1160,7 @@ const insertNameEntry = (index, skip) => {
   }
 }
 
-const insertExclusionListSelector = (list_arg, index) => {
+const insertExclusionListSelector = list_arg => {
   const modal = document.createElement('div')
   modal.id = 'thrift-modal'
   modal.innerHTML = `
@@ -1266,7 +1193,7 @@ const insertExclusionListSelector = (list_arg, index) => {
             </header>
             <div id="modal-selector-body" class="modal-body m-reset-body-padding-top m-reset-body-padding-bottom">
                 <div data-v-9b86b1d2="" data-v-c032a3c0="" at-attr="" class="b-rows-lists m-collections-list m-native-custom-scrollbar m-scrollbar-y m-invisible-scrollbar g-sides-l-gap g-negative-sides-gaps">
-                  ${formSelectorItems(list_arg, index)}
+                  ${formSelectorItems(list_arg)}
                  
                   <div data-v-cea4dd88="" data-v-c032a3c0="" class="infinite-loading-container" data-v-9b86b1d2="">
                       <div data-v-cea4dd88="" class="infinite-status-prompt" style="display: none;">
@@ -1403,22 +1330,6 @@ const getExclusionListInfo = async ({ listId }) => {
   }
 }
 
-// const deleteExclusionList = async (id) => {
-//   const url = `/api2/v2/lists/${id}`
-
-//   try {
-//     const authParams = await getAuthParams(url)
-
-//     await axios.delete(`https://onlyfans.com${url}`, {
-//       headers: authParams
-//     })
-//   } catch (error) {
-//     console.log('error', error)
-
-//     return Promise.reject(error)
-//   }
-// }
-
 const unsendMessage = async id => {
   const url = `/api2/v2/messages/queue/${id}`
 
@@ -1509,16 +1420,16 @@ const getMessageData = async id => {
   }
 }
 
-const performReThrifting = async index => {
+const performReThrifting = async () => {
   try {
     resetSteps()
-    updateStep(0)
+    updateStep(1)
 
     const usersList = await getUserLists()
 
     let initialList = usersList
 
-    insertExclusionListSelector(initialList, index)
+    insertExclusionListSelector(initialList)
 
     const searchInput = document.getElementById('thrift-selector-search')
 
@@ -1536,23 +1447,23 @@ const performReThrifting = async index => {
 
         const body = document.getElementById('modal-selector-body')
 
-        const newElements = formSelectorItems(result, index)
+        const newElements = formSelectorItems(result)
 
         body.innerHTML = `<div data-v-9b86b1d2="" data-v-c032a3c0="" at-attr="" class="b-rows-lists m-collections-list m-native-custom-scrollbar m-scrollbar-y m-invisible-scrollbar g-sides-l-gap g-negative-sides-gaps">${newElements}</div>`
 
-        handleScroll(initialList, index)
+        handleScroll(initialList)
       } catch (error) {
         console.log('error', error)
       }
     })
 
-    handleScroll(initialList, index)
+    handleScroll(initialList)
   } catch (error) {
     console.log('error - performReThrifting', error)
   }
 }
 
-const handleScroll = (initialList, index) => {
+const handleScroll = initialList => {
   const scrollContainer = document.querySelector(
     '.b-rows-lists.m-collections-list'
   )
@@ -1584,7 +1495,7 @@ const handleScroll = (initialList, index) => {
 
       initialList = [...initialList, ...usersListOffset]
 
-      const newElements = formSelectorItems(usersListOffset, index)
+      const newElements = formSelectorItems(usersListOffset)
 
       body.insertAdjacentHTML('beforeend', newElements)
 
@@ -1597,11 +1508,11 @@ const handleScroll = (initialList, index) => {
   })
 }
 
-const formSelectorItems = (items, index) => {
+const formSelectorItems = items => {
   return items
     ?.map(
       item => `
-      <label id="thrift-selector-item" data-index="${index}" data-name="${item?.name}" data-listid="${item?.id}" class="b-rows-lists__item__label m-collection-item g-radio-container" data-v-9d5bf552="" data-v-c032a3c0=""data-v-9b86b1d2="">
+      <label id="thrift-selector-item" data-name="${item?.name}" data-listid="${item?.id}" class="b-rows-lists__item__label m-collection-item g-radio-container" data-v-9d5bf552="" data-v-c032a3c0=""data-v-9b86b1d2="">
         <input id="uid-1667" type="checkbox" name="" class="b-input-radio" value="false">
         <span class="b-input-radio__label">
           <svg data-icon-name="icon-done" aria-hidden="true" class="g-icon">
@@ -1647,7 +1558,7 @@ const createScheduledMessage = async data => {
       { headers: authParams }
     )
 
-    updateStep(3)
+    updateStep(4)
 
     setTimeout(() => {
       setSuccessMessage()
@@ -1726,6 +1637,7 @@ async function insertElements() {
 
     unsentList = await getFullList(getStatsList, { type: 'unsent' })
   } catch (error) {
+    console.log('error', error)
     alert('Unable to initialize thrifting script. Please try again.')
   }
 }
