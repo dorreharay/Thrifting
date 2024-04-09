@@ -22,6 +22,7 @@ axios.defaults.paramsSerializer = function (params) {
 
 const disableOrigination = true
 
+let allCollections = []
 let currentMessageData = null
 let prevDate = null
 let isUnsentTab = false
@@ -140,9 +141,7 @@ export function initThrifting() {
                 waitForPage({
                   selector: '.table-vs__tr__outer',
                   callback: () => {
-                    insertHeading()
-
-                    runThriftObserver()
+                    insertElements?.()
                   }
                 })
               }
@@ -153,9 +152,7 @@ export function initThrifting() {
                 waitForPage({
                   selector: '.table-vs__tr__outer',
                   callback: () => {
-                    insertHeading()
-
-                    runThriftObserver()
+                    insertElements?.()
                   }
                 })
               }
@@ -288,6 +285,7 @@ const insertHeading = () => {
   const headingsContainer = document.querySelector('.table-vs__tr')
 
   if (headingsContainer?.innerText?.includes?.('THRIFT')) return
+  if (!headingsContainer) return
 
   const lastTableHeading = headingsContainer.lastChild
 
@@ -348,11 +346,17 @@ const listenThriftClicks = async e => {
 
     updateStep(0)
 
-    let index = list?.findIndex(
-      item =>
-        decodeToRegular(decodeHTMLEntities(item?.textCropped)) ===
-        decodeToRegular(content)
-    )
+    console.log('list', list, content, dateCellContent)
+
+    let index = list?.findIndex(item => {
+      const cropped =
+        decodeToRegular(decodeHTMLEntities(item?.textCropped)) || ''
+      const elText = decodeToRegular(content) || ''
+
+      return cropped?.trim?.() === elText?.trim?.()
+    })
+
+    console.log('1 step index', index)
 
     if (index === -1) {
       index = list?.findIndex(item => {
@@ -361,6 +365,8 @@ const listenThriftClicks = async e => {
         return formattedDate === dateCellContent
       })
     }
+
+    console.log('index', index)
 
     if (index === -1) {
       alert(
@@ -374,7 +380,7 @@ const listenThriftClicks = async e => {
         creator_username: creator,
         error_message: "Can't find message index",
         error_type: 'lost_index',
-        messages_list: list?.map(item => item?.textCropped),
+        messages_list: [],
         messages_list_length: list?.length,
         message_content: content,
         message_date: dateCellContent
@@ -526,6 +532,8 @@ const listenThriftClicks = async e => {
     const name = e.target.dataset.name
     const listId = e.target.dataset.listid
 
+    console.log('listId', listId)
+
     handleReThrift(name, listId, id === 'thrift-no-exclusion')
 
     modal.remove()
@@ -545,7 +553,13 @@ const getScheduledDate = async () => {
 const getPrevDate = async resultDate => {
   return new Promise((resolve, reject) => {
     chrome.storage.sync.get(['prevDate'], items => {
-      const prevDate = items?.prevDate
+      let prevDate = items?.prevDate
+
+      const isPastDate = dayjs(prevDate).isBefore(dayjs().add(1, 'hour'))
+
+      if (isPastDate) {
+        prevDate = ''
+      }
 
       resolve(prevDate || resultDate)
     })
@@ -901,7 +915,6 @@ const handleReThrift = async (name, listId, skipExlusionAndBuyers = false) => {
 
     await createScheduledMessage(payload)
   } catch (error) {
-    console.log('test', error, error?.response, error?.config)
     removeStatusWindow()
     resetSteps()
     alert(
@@ -942,7 +955,19 @@ const findCollection = async name => {
   try {
     const { data: searchResult } = await searchForVaultCollection(name)
 
-    let collection = searchResult?.list?.find(item => item?.name === name)
+    let collection = searchResult?.list?.find(
+      item =>
+        decodeToRegular(item?.name).toLowercase().trim() ===
+        decodeToRegular(name).toLowercase().trim()
+    )
+
+    if (!collection) {
+      collection = allCollections?.find(
+        item =>
+          decodeToRegular(item?.name).toLowercase().trim() ===
+          decodeToRegular(name).toLowercase().trim()
+      )
+    }
 
     if (!collection) {
       const newCollection = await createVaultCollection(name)
@@ -952,7 +977,7 @@ const findCollection = async name => {
 
     return collection
   } catch (error) {
-    console.log('error', error)
+    console.log('error', error?.response?.data)
   }
 }
 
@@ -980,10 +1005,13 @@ const addMediaToVault = async (name, message) => {
   try {
     const collection = await findCollection(name)
     // Add to Mass Messages Vault Folder
-    await addMediaToVaultCollection(
-      collection?.id,
-      message?.media?.map(item => item?.id)
-    )
+
+    if (collection) {
+      await addMediaToVaultCollection(
+        collection?.id,
+        message?.media?.map(item => item?.id)
+      )
+    }
 
     return collection
   } catch (error) {
@@ -1038,7 +1066,7 @@ const createVaultCollection = async name => {
 const searchForVaultCollection = async query => {
   const url = `/api2/v2/vault/lists?view=main&offset=0&query=${encodeURIComponent(
     query
-  )}&limit=10`
+  )}&limit=100`
 
   try {
     const authParams = await getAuthParams(url)
@@ -1055,7 +1083,25 @@ const searchForVaultCollection = async query => {
   }
 }
 
-const getStatsList = async ({ offset, type = 'sent', query }) => {
+const getVaultCollectionsList = async ({ offset }) => {
+  const url = `/api2/v2/vault/lists?view=main&offset=${offset * 100}&limit=100`
+
+  try {
+    const authParams = await getAuthParams(url)
+
+    const data = await axios.get(`https://onlyfans.com${url}`, {
+      headers: authParams
+    })
+
+    return data?.data
+  } catch (error) {
+    console.log('error', error)
+
+    return Promise.reject(error)
+  }
+}
+
+const getStatsList = async ({ offset, type, query }) => {
   const formattedQuery = query
     ? encodeURIComponent(query.trim()).replaceAll("'", '%27')
     : ''
@@ -1587,15 +1633,20 @@ const createScheduledMessage = async data => {
 
 async function insertElements() {
   try {
+    finishInitialize()
+
     startInitialize()
 
+    list = []
+
     const { list: items, hasMore: initialHasMore } = await getStatsList({
-      offset: 0
+      offset: 0,
+      type: isUnsentTab ? 'unsent' : 'sent'
     })
 
-    sentList = items
+    list = items
 
-    list = sentList
+    getVaultFoldersList()
 
     insertHeading()
     insertRows()
@@ -1604,41 +1655,61 @@ async function insertElements() {
 
     runThriftObserver()
 
-    getInitialUnsentList()
+    // getInitialUnsentList()
 
     finishInitialize()
 
     let finish = !initialHasMore
     let index = 1
 
-    while (!finish && !isUnsentTab) {
-      const { list: new_items, hasMore } = await getStatsList({ offset: index })
+    while (!finish) {
+      const { list: new_items, hasMore } = await getStatsList({
+        offset: index,
+        type: isUnsentTab ? 'unsent' : 'sent'
+      })
 
       finish = !hasMore
       index = index + 1
 
-      sentList = [...sentList, ...new_items]
-
-      list = [...sentList, ...new_items]
+      list = [...list, ...new_items]
 
       finishInitialize()
 
       startInitialize(
         `Ready to thrift messages until ${dayjs(
-          sentList?.slice(-1)?.[0]?.date
+          list?.slice(-1)?.[0]?.date
         ).format('MMM D, YYYY h:mm a')}`,
         true
       )
     }
 
-    list = sentList
-
     finishInitialize()
-
-    unsentList = await getFullList(getStatsList, { type: 'unsent' })
   } catch (error) {
     console.log('error', error)
     alert('Unable to initialize thrifting script. Please try again.')
+  }
+}
+
+const getVaultFoldersList = async () => {
+  const { list: items, hasMore: initialHasMore } =
+    await getVaultCollectionsList({
+      offset: 0
+    })
+
+  allCollections = items
+
+  let finish = !initialHasMore
+  let index = 1
+
+  while (!finish) {
+    const { list: new_items, hasMore } = await getVaultCollectionsList({
+      offset: index
+    })
+
+    finish = !hasMore
+    index = index + 1
+
+    allCollections = [...allCollections, ...new_items]
   }
 }
 
@@ -1646,7 +1717,7 @@ const getInitialUnsentList = async () => {
   const list1 = await getStatsList({ offset: 0, type: 'unsent' })
   unsentList = list1?.list
 
-  const list2 = await getStatsList({ offset: 100, type: 'unsent' })
+  const list2 = await getStatsList({ offset: 1, type: 'unsent' })
   unsentList = [...(unsentList || []), ...(list2?.list || [])]
 }
 
