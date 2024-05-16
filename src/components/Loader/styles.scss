@@ -1,0 +1,13 @@
+.loader {
+  width: 30px;
+  height: 30px;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  background-image: url('../../assets/images/loader.svg');
+  color: #000;
+
+  &.white {
+    color: #FFF;
+  }
+}

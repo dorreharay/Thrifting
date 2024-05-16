@@ -1,0 +1,5 @@
+/* eslint-disable no-undef */
+;(async () => {
+  const src = chrome.runtime.getURL('content.js')
+  await import(src)
+})()
