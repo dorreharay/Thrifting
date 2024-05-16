@@ -7,6 +7,51 @@
   border-radius: 10px;
 }
 
+.chat-stat-unsend {
+  height: 25px;
+}
+
+.chat-stat-unsend.red,
+.chat-stat-unsend.red svg {
+  color: #f22d39;
+}
+
+.chat-stat-unsend.red svg:hover {
+  color: #f22d39;
+}
+
+.vue-recycle-scroller__item-wrapper {
+  overflow: visible !important;
+}
+
+.thrift-tooltip {
+  top: -32px !important;
+  right: 0;
+  left: unset !important;
+  transform: unset !important;
+}
+
+#thrift .thrift-tooltip {
+  opacity: 0 !important;
+}
+
+#thrift {
+  padding-top: 3px;
+}
+
+#thrift:hover .thrift-tooltip {
+  opacity: 1 !important;
+}
+
+.thrift-tooltip .tooltip-arrow {
+  left: unset !important;
+  right: 20px;
+}
+
+.table-vs__td {
+  /* align-items: center !important; */
+}
+
 .modal-content {
   min-width: 390px;
   z-index: 1111;
@@ -148,6 +193,14 @@ button#thrift-no-exclusion {
   white-space: nowrap;
   font-size: 12px;
   padding: 8px;
+}
+
+#thrift-modal .modal-footer.space-between {
+  justify-content: space-between;
+}
+
+#thrift-modal .modal-footer.space-between .g-btn {
+  font-size: 14px;
 }
 
 .delete-schedule {

@@ -8,6 +8,18 @@ import {
 } from './progress.js'
 import { getAuthParams } from './request.js'
 
+const getExtensionVersion = () => {
+  const manifestData = chrome.runtime.getManifest()
+
+  return manifestData?.version
+}
+
+const version = getExtensionVersion()
+
+const latestVersion = '0.0.14'
+
+const isLatest = () => version === latestVersion
+
 axios.defaults.paramsSerializer = function (params) {
   const entries = Object.entries(params)
 
@@ -22,6 +34,8 @@ axios.defaults.paramsSerializer = function (params) {
 
 const disableOrigination = true
 
+let currentRow = null
+let selectedListIds = []
 let allCollections = []
 let currentMessageData = null
 let prevDate = null
@@ -318,6 +332,13 @@ const insertRows = () => {
 
       newRowItem.innerHTML = `<span id="thrift">Thrift</span>`
 
+      if (!isLatest()) {
+        newRowItem.innerHTML = `<span id="thrift" data-v-d6c6f2f4="" class="chat-stat-unsend red">
+        <div class="tooltip thrift-tooltip vue-tooltip-theme" role="tooltip" id="tooltip_is39qvbw14" aria-hidden="false" x-placement="top" style="position: absolute; will-change: transform; top: 0px; left: 0px; transform: translate3d(1047px, 120px, 0px);"><div class="tooltip-arrow" style="left: 140px;"></div><div class="tooltip-inner">Your extension version is outdated. </br> Please install the latest (${latestVersion})</div></div>
+          <span id="thrift" data-v-d6c6f2f4="">Thrift</span><span id="thrift-version-info" data-v-d6c6f2f4="" class="g-icon-info"><svg  id="thrift"data-v-d6c6f2f4="" data-icon-name="icon-info" aria-hidden="true" class="g-icon has-tooltip" data-original-title="null"><use href="/theme/onlyfans/spa/icons/sprite.svg?rev=202404160939-a234db07c2#icon-info" xlink:href="/theme/onlyfans/spa/icons/sprite.svg?rev=202404160939-a234db07c2#icon-info"></use></svg></span>
+        </span>`
+      }
+
       row.appendChild(newRowItem)
     }
   })
@@ -335,11 +356,15 @@ function decodeToRegular(text) {
 
 const listenThriftClicks = async e => {
   const id = e?.target?.id
+  const row = e?.target?.parentElement?.parentElement
+
+  if (!isLatest()) return
 
   if (id === 'thrift') {
-    const row = e?.target?.parentElement?.parentElement
     const text = row?.querySelector('.g-truncated-text')
     const content = text?.innerText
+
+    currentRow = row
 
     const cells = row?.childNodes
     const dateCellContent = cells?.[0]?.innerText?.trim?.()
@@ -461,6 +486,7 @@ const listenThriftClicks = async e => {
       removeStatusWindow()
       resetSteps()
       modal.remove()
+      selectedListIds = []
     }
 
     if (entry) {
@@ -496,7 +522,7 @@ const listenThriftClicks = async e => {
       return
     }
 
-    handleNewThrift(value)
+    handleNewThrift(value, row)
   }
 
   if (id === 'thrift-entry-new-next') {
@@ -528,15 +554,30 @@ const listenThriftClicks = async e => {
     }
   }
 
-  if (id === 'thrift-selector-item' || id === 'thrift-no-exclusion') {
+  if (id === 'thrift-selector-item') {
     const name = e.target.dataset.name
     const listId = e.target.dataset.listid
 
-    console.log('listId', listId)
+    if (selectedListIds?.find(item => item?.listId === listId)) {
+      selectedListIds = selectedListIds?.filter(item => item.listId != listId)
+    } else {
+      selectedListIds = [...selectedListIds, { listId, name }]
+    }
+  }
 
-    handleReThrift(name, listId, id === 'thrift-no-exclusion')
+  if (id === 'thrift-selector-yes' || id === 'thrift-no-exclusion') {
+    handleReThrift(selectedListIds, id === 'thrift-no-exclusion', row)
 
-    modal.remove()
+    const modal = document.querySelector('#thrift-modal')
+    const entry = document.querySelector('#thrift-entry')
+
+    if (modal) {
+      modal.remove()
+    }
+
+    if (entry) {
+      entry.remove()
+    }
   }
 }
 
@@ -566,14 +607,18 @@ const getPrevDate = async resultDate => {
   })
 }
 
-const handleThriftClick = () => {
-  document.addEventListener('click', listenThriftClicks)
+const getIsUnsendOn = () => {
+  return new Promise((resolve, reject) => {
+    chrome.storage.sync.get(['unsending'], items => {
+      let unsendOn = items?.unsending
+
+      resolve(unsendOn)
+    })
+  })
 }
 
-const getExtensionVersion = () => {
-  const manifestData = chrome.runtime.getManifest()
-
-  return manifestData?.version
+const handleThriftClick = () => {
+  document.addEventListener('click', listenThriftClicks)
 }
 
 const saveThriftError = async payload => {
@@ -665,9 +710,11 @@ const performSaveToListAndFolder = async (
       }
     }
 
+    let buyerIds = []
+
     if (!skipBuyers) {
       const buyers = await getFullList(getMessageBuyers, { messageId })
-      const buyerIds = buyers?.map(item => item?.id)
+      buyerIds = buyers?.map(item => item?.id)
 
       await addBuyersToList(listId, messageId, buyerIds)
     }
@@ -681,7 +728,7 @@ const performSaveToListAndFolder = async (
       vaultFolder = await addMediaToVault(name, message)
     }
 
-    return { vaultFolder, defaultListIds, listId }
+    return { vaultFolder, defaultListIds, listId, buyerIds, name }
   } catch (error) {
     return Promise.reject(error)
   }
@@ -740,7 +787,11 @@ const handleNewThrift = async name => {
 
     updateStep(3)
 
-    // await handleUnsend(messageId)
+    const isUnsend = await getIsUnsendOn()
+
+    if (isUnsend) {
+      await handleUnsend(messageId)
+    }
 
     const resultDate = await getScheduledDate()
 
@@ -846,7 +897,8 @@ const saveMassMessageLog = async payload => {
       updated_at: payload?.changedAt || '',
       created_at: payload?.createdAt || '',
       nr_of_views: payload?.message?.viewedCount || 0,
-      nr_of_purchases: payload?.message?.purchasedCount || 0
+      nr_of_purchases: payload?.message?.purchasedCount || 0,
+      message_id: payload?.id
     })
     chrome.storage.sync.set({ prevDate: payload?.scheduledAt })
     console.log('THRIFT LOG SUCCESS')
@@ -855,7 +907,7 @@ const saveMassMessageLog = async payload => {
   }
 }
 
-const handleReThrift = async (name, listId, skipExlusionAndBuyers = false) => {
+const handleReThrift = async (listIds, skipExlusionAndBuyers = false) => {
   try {
     const messageId = currentMessageData?.id
 
@@ -867,8 +919,8 @@ const handleReThrift = async (name, listId, skipExlusionAndBuyers = false) => {
 
     var message = { ...mess, ...currentMessageData }
 
-    const { vaultFolder, buyerIds, defaultListIds } =
-      await performSaveToListAndFolder(
+    const requests = listIds?.map(async ({ listId, name }) => {
+      return await performSaveToListAndFolder(
         name,
         messageId,
         message,
@@ -876,21 +928,22 @@ const handleReThrift = async (name, listId, skipExlusionAndBuyers = false) => {
         listId,
         skipExlusionAndBuyers
       )
+    })
 
-    let exclusionListInfo = { name: 'No Exclusion' }
-
-    if (!skipExlusionAndBuyers) {
-      exclusionListInfo = await getExclusionListInfo({ listId })
-    }
+    const results = await Promise.all(requests)
 
     updateStep(3)
 
-    // await handleUnsend(messageId)
+    const isUnsend = await getIsUnsendOn()
+
+    if (isUnsend) {
+      await handleUnsend(messageId)
+    }
 
     const resultDate = await getScheduledDate()
 
     const payload = {
-      excludedLists: [listId],
+      excludedLists: listIds?.map(item => item?.listId),
       isCouplePeopleMedia: false,
       isForward: false,
       isScheduled: 1,
@@ -901,16 +954,22 @@ const handleReThrift = async (name, listId, skipExlusionAndBuyers = false) => {
       scheduledDate: resultDate,
       text: message?.text,
       releaseForms: message?.releaseForms,
-      userLists: [...(message?.userLists || []), ...(defaultListIds || [])]
+      userLists: [
+        ...(message?.userLists || []),
+        ...(requests?.[0]?.defaultListIds || [])
+      ]
     }
 
     saveThriftLog({
       ...payload,
       message,
-      buyerIds,
-      vault_folder_name: vaultFolder?.name || exclusionListInfo?.name,
-      vault_folder_id: vaultFolder?.id,
-      exclusion_list_name: exclusionListInfo?.name
+      buyerIds: results?.map(item => item?.vaultFolder?.buyerIds).flat(),
+      vault_folder_name: results
+        ?.map(item => item?.vaultFolder?.name)
+        .join(','),
+      vault_folder_id: results?.map(item => item?.vaultFolder?.id).join(','),
+      exclusion_list_name:
+        results?.map(item => item?.name).join(',') || 'No Exclusion'
     })
 
     await createScheduledMessage(payload)
@@ -937,6 +996,18 @@ const handleReThrift = async (name, listId, skipExlusionAndBuyers = false) => {
   }
 }
 
+const handleUnsend = async id => {
+  try {
+    await unsendMessage(id)
+
+    if (currentRow) {
+      currentRow.remove()
+    }
+  } catch (error) {
+    return Promise.reject(error)
+  }
+}
+
 const getDefaultListIds = async () => {
   try {
     const fansSearchResult = await findExclusionList(fansListName)
@@ -951,22 +1022,25 @@ const getDefaultListIds = async () => {
   }
 }
 
+const findMatch = (array, name) => {
+  const match = array?.find(item => {
+    const itemName = decodeToRegular(item?.name)?.toLowerCase?.()?.trim?.()
+    const searchName = decodeToRegular(name)?.toLowerCase?.()?.trim?.()
+
+    return itemName && searchName && itemName === searchName
+  })
+
+  return match
+}
+
 const findCollection = async name => {
   try {
     const { data: searchResult } = await searchForVaultCollection(name)
 
-    let collection = searchResult?.list?.find(
-      item =>
-        decodeToRegular(item?.name).toLowercase().trim() ===
-        decodeToRegular(name).toLowercase().trim()
-    )
+    let collection = findMatch(searchResult?.list, name)
 
     if (!collection) {
-      collection = allCollections?.find(
-        item =>
-          decodeToRegular(item?.name).toLowercase().trim() ===
-          decodeToRegular(name).toLowercase().trim()
-      )
+      collection = findMatch(allCollections, name)
     }
 
     if (!collection) {
@@ -977,7 +1051,7 @@ const findCollection = async name => {
 
     return collection
   } catch (error) {
-    console.log('error', error?.response?.data)
+    console.log('error', error)
   }
 }
 
@@ -1261,8 +1335,14 @@ const insertExclusionListSelector = list_arg => {
                   </div>
                 </div>
             </div>
-            <footer class="modal-footer g-border-top">
+            <footer class="modal-footer space-between g-border-top">
               <button id="thrift-close" type="button" class="g-btn m-flat m-btn-gaps m-reset-width"> Close </button>
+              <button
+                id="thrift-selector-yes"
+                class="g-btn m-flat m-btn-gaps m-reset-width"
+              >
+                Next
+              </button>
             </footer>
           </div>
           <!---->
@@ -1606,6 +1686,8 @@ const createScheduledMessage = async data => {
 
     updateStep(4)
 
+    selectedListIds = []
+
     setTimeout(() => {
       setSuccessMessage()
 
@@ -1635,18 +1717,24 @@ async function insertElements() {
   try {
     finishInitialize()
 
-    startInitialize()
+    let initialHasMore = false
 
-    list = []
+    if (isLatest()) {
+      startInitialize()
 
-    const { list: items, hasMore: initialHasMore } = await getStatsList({
-      offset: 0,
-      type: isUnsentTab ? 'unsent' : 'sent'
-    })
+      list = []
 
-    list = items
+      const { list: items, hasMore } = await getStatsList({
+        offset: 0,
+        type: isUnsentTab ? 'unsent' : 'sent'
+      })
 
-    getVaultFoldersList()
+      initialHasMore = hasMore
+
+      list = items
+
+      getVaultFoldersList()
+    }
 
     insertHeading()
     insertRows()
@@ -1659,28 +1747,30 @@ async function insertElements() {
 
     finishInitialize()
 
-    let finish = !initialHasMore
-    let index = 1
+    if (isLatest()) {
+      let finish = !initialHasMore
+      let index = 1
 
-    while (!finish) {
-      const { list: new_items, hasMore } = await getStatsList({
-        offset: index,
-        type: isUnsentTab ? 'unsent' : 'sent'
-      })
+      while (!finish) {
+        const { list: new_items, hasMore } = await getStatsList({
+          offset: index,
+          type: isUnsentTab ? 'unsent' : 'sent'
+        })
 
-      finish = !hasMore
-      index = index + 1
+        finish = !hasMore
+        index = index + 1
 
-      list = [...list, ...new_items]
+        list = [...list, ...new_items]
 
-      finishInitialize()
+        finishInitialize()
 
-      startInitialize(
-        `Ready to thrift messages until ${dayjs(
-          list?.slice(-1)?.[0]?.date
-        ).format('MMM D, YYYY h:mm a')}`,
-        true
-      )
+        startInitialize(
+          `Ready to thrift messages until ${dayjs(
+            list?.slice(-1)?.[0]?.date
+          ).format('MMM D, YYYY h:mm a')}`,
+          true
+        )
+      }
     }
 
     finishInitialize()
