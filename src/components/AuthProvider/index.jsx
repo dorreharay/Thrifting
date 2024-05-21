@@ -69,11 +69,6 @@ function AuthProvider(props) {
 
       setCredentials({ ...credentials, accessToken: result?.data?.token })
 
-      axios.interceptors.request.use(function (config) {
-        config.headers.Authorization = `Bearer ${result?.data?.token}`
-        return config
-      })
-
       setIsLoggedIn(!!result)
 
       const [tab] = await chrome.tabs.query({

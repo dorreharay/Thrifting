@@ -11,20 +11,28 @@ import { MESSAGES } from '../../constants/messages'
 import { getProjectPassword } from '../../api/project'
 
 function ProjectsList() {
+  const navigate = useNavigate()
+
+  const [
+    credentials,
+    setCredentials,
+    isPersistent,
+    error,
+    isInitialStateResolved,
+  ] = useStorage('credentials')
+  const [project, setProject] = useStorage('project')
+
+  const { data: user } = useUser({
+    enabled: !!credentials && !!isInitialStateResolved,
+  })
+
   const {
     data: projectsList = [],
     isLoading,
     isError,
     refetch,
     isRefetching,
-  } = useProjects()
-
-  const navigate = useNavigate()
-
-  const [credentials, setCredentials] = useStorage('credentials')
-  const [project, setProject] = useStorage('project')
-
-  const { data: user } = useUser({ enabled: !!credentials })
+  } = useProjects({}, { enabled: !!isInitialStateResolved })
 
   const [entryLoading, setEntryLoading] = useState(false)
 
