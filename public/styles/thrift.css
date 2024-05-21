@@ -1,3 +1,16 @@
+.cl-hidden h4,
+.g-input__wrapper {
+  position: absolute !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.cl-hidden .m-captcha {
+  position: unset !important;
+  opacity: 1 !important;
+  pointer-events: all !important;
+}
+
 .thrift-status .modal-content {
   position: fixed;
   top: 50px;

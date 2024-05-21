@@ -33,6 +33,7 @@ function AuthProvider(props) {
 
   const [loading, setLoading] = useState(true)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [isContentScriptLoaded, setIsContentScriptLoaded] = useState(false)
 
   const getCurrentHandle = tab => {
     return new Promise((resolve, reject) => {
@@ -54,15 +55,6 @@ function AuthProvider(props) {
 
   const validateToken = async () => {
     try {
-      const [tab] = await chrome.tabs.query({
-        active: true,
-        currentWindow: true,
-      })
-
-      await chrome.tabs.sendMessage(tab?.id, { type: 'PING' })
-
-      console.log('credentials', credentials)
-
       if (!credentials) {
         navigate('/')
         setIsLoggedIn(false)
@@ -84,14 +76,15 @@ function AuthProvider(props) {
 
       setIsLoggedIn(!!result)
 
-      const handle = await getCurrentHandle(tab)
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      })
 
-      console.log('project', project)
-      console.log('handle', handle)
+      const handle = await getCurrentHandle(tab)
 
       if (project) {
         if (handle && handle !== 'onlyfans') {
-          console.log('project', project)
           setProject(project)
           navigate('/project')
         } else {
@@ -102,9 +95,6 @@ function AuthProvider(props) {
         if (handle && handle !== 'onlyfans') {
           const project = await getProjectByHandle(handle)
 
-          console.log('project', project)
-          console.log('handle', handle)
-
           if (project) {
             setProject(project)
             navigate('/project')
@@ -114,7 +104,8 @@ function AuthProvider(props) {
         }
       }
     } catch (error) {
-      console.log('error', error?.message)
+      console.log('error - validateToken', error)
+
       if (
         error?.message ===
           'Could not establish connection. Receiving end does not exist.' ||
@@ -131,14 +122,47 @@ function AuthProvider(props) {
     }
   }
 
+  const init = async () => {
+    const [tab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    })
+
+    chrome.tabs.sendMessage(tab?.id, { type: 'PING' }, loaded => {
+      if (loaded) {
+        setTimeout(() => {
+          setIsContentScriptLoaded(true)
+        }, 1000)
+      } else {
+        const timeout = setTimeout(() => {
+          chrome.tabs.reload()
+        }, 5000)
+
+        const interval = setInterval(async () => {
+          chrome.tabs.sendMessage(tab?.id, { type: 'PING' }, loaded => {
+            if (loaded) {
+              clearInterval(interval)
+              clearTimeout(timeout)
+
+              setTimeout(() => {
+                setIsContentScriptLoaded(true)
+              }, 1000)
+            }
+          })
+        }, 1000)
+      }
+    })
+  }
+
   useEffect(() => {
-    console.log('isInitialStateResolved', isInitialStateResolved)
-    if (isInitialStateResolved) {
+    if (isInitialStateResolved && isContentScriptLoaded) {
       validateToken()
-      // navigate('/settings')
-      // setLoading(false)
     }
-  }, [isInitialStateResolved])
+  }, [isInitialStateResolved, isContentScriptLoaded])
+
+  useEffect(() => {
+    init()
+  }, [])
 
   useEffect(() => {
     setIsLoggedIn(!!credentials)

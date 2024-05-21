@@ -3,7 +3,6 @@ import Buffer from './libs/buffer.js'
 import sha1 from './libs/sha1.js'
 
 const getCookie = () => {
-  console.log('chrome.tabs', chrome.runtime)
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage(
       {

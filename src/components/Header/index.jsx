@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { logoutFromProject } from '../../helpers'
 import useStorage from '../../hooks/storage'
 import axios from '../../https'
 import Loader from '../Loader'
@@ -25,6 +26,8 @@ function Header(props) {
       await axios.post('/auth/logout', { token: credentials?.refreshToken })
 
       setCredentials(null)
+
+      await logoutFromProject()
 
       handleCloseModal()
 

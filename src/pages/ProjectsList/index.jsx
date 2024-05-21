@@ -55,6 +55,8 @@ function ProjectsList() {
 
       const password = await getProjectPassword(id)
 
+      window.close()
+
       const [tab] = await chrome.tabs.query({
         active: true,
         currentWindow: true,

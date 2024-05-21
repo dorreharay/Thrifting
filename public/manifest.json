@@ -26,16 +26,17 @@
   ],
   "content_scripts": [
     {
-      "all_frames": false,
+      "all_frames": true,
       "matches": ["<all_urls>"],
       "js": ["connect.js"],
-      "css": ["styles/thrift.css"]
+      "css": ["styles/thrift.css"],
+      "run_at": "document_start"
     },
     {
       "all_frames": true,
       "matches": ["<all_urls>"],
       "js": ["main.js"],
-      "css": ["index.css"]
+      "run_at": "document_start"
     }
   ],
   "web_accessible_resources": [

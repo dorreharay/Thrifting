@@ -8,8 +8,10 @@ import useStorage from '../../hooks/storage'
 import Input from '../../components/Input'
 
 const initialValues = {
-  email: 'jackson@creatorsinc.com',
+  email: 'paigeelliott@creatorsinc.com',
   password: 'aym*fpm3EMK3hxy0brp',
+  // email: '',
+  // password: '',
 }
 
 function Login() {
@@ -46,11 +48,6 @@ function Login() {
       const result = await axios.post('/auth/login', values)
 
       setCredentials(result?.data)
-
-      axios.interceptors.request.use(function (config) {
-        config.headers.Authorization = `Bearer ${result?.data?.accessToken}`
-        return config
-      })
 
       if (project) {
         navigate('/project')

@@ -49,14 +49,12 @@ function Settings() {
     chrome.storage.sync.get(['unsending'], items => {
       const unsendOn = items?.unsending
 
-      console.log('unsendOn', unsendOn)
-
       setUnsending(unsendOn)
     })
   }, [])
 
   return (
-    <div className="py-6 pb-10 w-full">
+    <div className="py-6 pb-6 w-full">
       <div className="flex justify-between pb-4">
         <div />
 

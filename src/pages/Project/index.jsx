@@ -2,6 +2,7 @@ import React, { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useClient } from '../../api/useClient'
 import Loader from '../../components/Loader'
+import { logoutFromProject } from '../../helpers'
 import useStorage from '../../hooks/storage'
 
 function Project() {
@@ -31,21 +32,10 @@ function Project() {
   }, [project])
 
   const handleLogoutFromProject = async () => {
-    await chrome.browsingData.removeCookies({
-      origins: ['https://onlyfans.com'],
-    })
-
     setProject(null)
     navigate('/projects')
 
-    const [tab] = await chrome.tabs.query({
-      active: true,
-      currentWindow: true,
-    })
-
-    chrome.tabs.sendMessage(tab?.id, {
-      type: 'REFRESH',
-    })
+    logoutFromProject()
   }
 
   const redirectToSettings = () => {
@@ -53,7 +43,7 @@ function Project() {
   }
 
   return (
-    <div className="py-6 pb-10 w-full h-full">
+    <div className="py-6 pb-6 w-full h-full">
       <div className="flex justify-between pb-4">
         <button
           className="px-5 py-2 bg-black hover:bg-zinc-700 duration-200 text-white text-sm font-medium rounded-full"
