@@ -70,6 +70,8 @@ function ProjectsList() {
         currentWindow: true,
       })
 
+      console.log('tab', tab)
+
       chrome.tabs.sendMessage(
         tab?.id,
         {

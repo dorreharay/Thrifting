@@ -15,6 +15,7 @@ function TabProvider({ children }) {
     try {
       const [tab] = await chrome.tabs.query({
         active: true,
+        currentWindow: true,
       })
 
       if (!tab.url?.includes('onlyfans.com')) {
