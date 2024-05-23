@@ -8,7 +8,7 @@ import useStorage from '../../hooks/storage'
 import Input from '../../components/Input'
 
 const initialValues = {
-  email: 'paigeelliott@creatorsinc.com',
+  email: 'jackson@creatorsinc.com',
   password: 'aym*fpm3EMK3hxy0brp',
   // email: '',
   // password: '',

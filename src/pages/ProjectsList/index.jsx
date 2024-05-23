@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import cx from 'classnames'
-import { sortBy } from 'lodash'
+import { orderBy } from 'lodash'
 import { useProjects } from '../../api/useProjects'
 import { useUser } from '../../api/useUser'
 import Input from '../../components/Input'
@@ -63,8 +63,6 @@ function ProjectsList() {
 
       const password = await getProjectPassword(id)
 
-      window.close()
-
       const [tab] = await chrome.tabs.query({
         active: true,
         currentWindow: true,
@@ -75,7 +73,7 @@ function ProjectsList() {
       chrome.tabs.sendMessage(
         tab?.id,
         {
-          type: MESSAGES.CREDENTIALS,
+          type: 'CREDENTIALS',
           payload: { email, password },
         },
         response => {
@@ -87,6 +85,10 @@ function ProjectsList() {
           setEntryLoading(false)
         },
       )
+
+      window.close()
+
+      setProject(project)
     } catch (error) {
       console.log('error - handleOFEntry', error)
     }
@@ -97,14 +99,19 @@ function ProjectsList() {
     const isAdmin =
       user?.roles?.includes('ADMIN') || user?.roles?.includes('SUDO')
 
-    const preparedList = projectsList.filter(item => {
-      const hasAccess =
-        isAdmin || item?.managers.find(manager => manager?.id === userId)
+    const preparedList = projectsList
+      .filter(item => {
+        const hasAccess =
+          isAdmin || item?.managers.find(manager => manager?.id === userId)
 
-      return hasAccess
-    })
+        return hasAccess
+      })
+      .map(item => ({
+        ...item,
+        sortName: item?.name.replaceAll(' ', '').replace(/[^a-zA-Z ]/g, ''),
+      }))
 
-    const sorted = sortBy(preparedList, 'name')
+    const sorted = orderBy(preparedList, 'sortName')
 
     if (values?.search) {
       return sorted?.filter(item => {
@@ -140,7 +147,7 @@ function ProjectsList() {
   }
 
   return (
-    <div className="pb-16 w-full overflow-y-auto pl-3 -ml-3 box-border">
+    <div className="pb-16 w-full overflow-y-auto no-scrollbar pl-3 -ml-3 box-border">
       <Input
         className="bg-transparent p-2 pr-16 px-5 outline-none w-full"
         containerClassName="w-3/5 mt-6 mb-4"

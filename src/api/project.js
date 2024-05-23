@@ -9,7 +9,11 @@ export const getProjectPassword = async projectId => {
 }
 
 export const getProjectByHandle = async handle => {
-  const response = await axios.get(`/client-project/of-handle/${handle}`)
+  try {
+    const response = await axios.get(`/client-project/of-handle/${handle}`)
 
-  return response?.data?.item
+    return response?.data?.item
+  } catch (error) {
+    return Promise.reject('No Account')
+  }
 }

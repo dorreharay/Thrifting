@@ -9,6 +9,7 @@ import { getProjectByHandle } from '../../api/project'
 
 import Loader from '../Loader'
 import Header from '../Header'
+import { logoutFromProject } from '../../helpers'
 
 function AuthProvider(props) {
   const { children } = props
@@ -20,7 +21,7 @@ function AuthProvider(props) {
     credentials,
     setCredentials,
     isPersistent,
-    error,
+    errorCreds,
     isInitialStateResolved,
   ] = useStorage('credentials')
   const [
@@ -30,10 +31,19 @@ function AuthProvider(props) {
     errorPr,
     isInitialStateResolvedPr,
   ] = useStorage('project')
+  const [error, setError] = useStorage('error')
 
   const [loading, setLoading] = useState(true)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isContentScriptLoaded, setIsContentScriptLoaded] = useState(false)
+
+  useEffect(() => {
+    if (error) {
+      setTimeout(() => {
+        setError(null)
+      }, 3000)
+    }
+  }, [error])
 
   const getCurrentHandle = tab => {
     return new Promise((resolve, reject) => {
@@ -78,6 +88,8 @@ function AuthProvider(props) {
 
       const handle = await getCurrentHandle(tab)
 
+      console.log('project', project)
+
       if (project) {
         if (handle && handle !== 'onlyfans') {
           setProject(project)
@@ -93,6 +105,10 @@ function AuthProvider(props) {
           if (project) {
             setProject(project)
             navigate('/project')
+          } else {
+            setError(`Project @${handle} Not Found`)
+            await logoutFromProject()
+            navigate('/projects')
           }
         } else {
           navigate('/projects')
@@ -150,10 +166,10 @@ function AuthProvider(props) {
   }
 
   useEffect(() => {
-    if (isInitialStateResolved && isContentScriptLoaded) {
+    if (isInitialStateResolved && isContentScriptLoaded && chrome?.tabs) {
       validateToken()
     }
-  }, [isInitialStateResolved, isContentScriptLoaded])
+  }, [isInitialStateResolved, isContentScriptLoaded, chrome?.tabs])
 
   useEffect(() => {
     init()
@@ -185,6 +201,14 @@ function AuthProvider(props) {
         'h-[500px]': pathname !== '/project' && pathname !== '/settings',
       })}
     >
+      <div
+        className={cx(
+          'w-full px-8 bg-rose-800 text-white font-regular text-sm transition-opacity opacity-0',
+          { 'opacity-100 py-2': !!error, 'h-[0px]': !error },
+        )}
+      >
+        {error}
+      </div>
       <Header
         isLoggedIn={isLoggedIn}
         setIsLoggedIn={setIsLoggedIn}

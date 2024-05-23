@@ -28,10 +28,11 @@ waitForPage({
         sendResponse,
       ) {
         if (request.type === 'CREDENTIALS') {
-          const emailInput = document.querySelector(`[name="email"]`)
+          console.log('emailInput', emailInput)
 
           if (emailInput) {
             emailInput.value = request?.payload?.email
+            console.log('request', request)
             emailInput.dispatchEvent(new Event('input', { bubbles: true }))
           }
 
@@ -45,29 +46,31 @@ waitForPage({
           const submit = document.querySelector(`[type="submit"]`)
 
           if (submit) {
-            submit.click()
+            setTimeout(() => {
+              submit.click()
 
-            const timeout = setTimeout(() => {
-              sendResponse({ success: false })
-            }, 5000)
-
-            waitForPage({
-              selector: '.l-header',
-              callback: () => {
-                clearTimeout(timeout)
-                sendResponse({ success: true })
-              },
-            })
-
-            waitForPage({
-              selector: '.error_place_form',
-              callback: () => {
-                clearTimeout(timeout)
+              const timeout = setTimeout(() => {
                 sendResponse({ success: false })
-              },
-            })
+              }, 5000)
 
-            return true
+              waitForPage({
+                selector: '.l-header',
+                callback: () => {
+                  clearTimeout(timeout)
+                  sendResponse({ success: true })
+                },
+              })
+
+              waitForPage({
+                selector: '.error_place_form',
+                callback: () => {
+                  clearTimeout(timeout)
+                  sendResponse({ success: false })
+                },
+              })
+
+              return true
+            }, 1000)
           }
         }
       })
