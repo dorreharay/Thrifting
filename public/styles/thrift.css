@@ -1,5 +1,5 @@
 .cl-hidden h4,
-.g-input__wrapper {
+.cl-hidden .g-input__wrapper {
   position: absolute !important;
   opacity: 0 !important;
   pointer-events: none !important;
@@ -219,6 +219,10 @@ button#thrift-no-exclusion {
 .delete-schedule {
   height: auto !important;
   padding-bottom: 10px;
+}
+
+.delete-schedule .b-dropzone__preview {
+  width: 100%;
 }
 
 .delete-schedule .m-schedule {

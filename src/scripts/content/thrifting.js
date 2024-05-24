@@ -16,7 +16,7 @@ const getExtensionVersion = () => {
 
 const version = getExtensionVersion()
 
-const latestVersion = '1.6.0'
+const latestVersion = '1.6.2'
 
 const isLatest = () => version === latestVersion
 
@@ -37,7 +37,9 @@ const followingListName = 'Following'
 
 const getSentBy = () => {
   try {
-    return ''
+    const data = await chrome.storage.sync.get('user')
+
+    return data?.user?.email
   } catch (error) {
     console.log('error', error)
   }

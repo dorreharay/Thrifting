@@ -8,8 +8,6 @@ import {
 } from './progress.js'
 import { getAuthParams } from './request.js'
 
-console.log('chrome', chrome)
-
 getAuthParams()
 
 const getExtensionVersion = () => {
@@ -20,7 +18,7 @@ const getExtensionVersion = () => {
 
 const version = getExtensionVersion()
 
-const latestVersion = '1.6.0'
+const latestVersion = '1.6.2'
 
 const isLatest = () => version === latestVersion
 
@@ -39,9 +37,11 @@ const defaultVaultCollection = 'Mass Messages'
 const fansListName = 'Fans'
 const followingListName = 'Following'
 
-const getSentBy = () => {
+const getSentBy = async () => {
   try {
-    return ''
+    const data = await chrome.storage.sync.get('user')
+
+    return data?.user?.email
   } catch (error) {
     console.log('error', error)
   }
@@ -873,7 +873,7 @@ const saveMassMessageLog = async payload => {
       `https://thriftingapi.online/thrifts/${payload?.fromUser?.username}`,
     )
 
-    const sent_by = getSentBy()
+    const sent_by = await getSentBy()
 
     await axios.post('https://thriftingapi.online/mass-messages', {
       thrift_id: thrift_info?.data?.id || '',

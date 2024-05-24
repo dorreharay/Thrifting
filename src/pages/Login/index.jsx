@@ -8,16 +8,17 @@ import useStorage from '../../hooks/storage'
 import Input from '../../components/Input'
 
 const initialValues = {
-  email: 'jackson@creatorsinc.com',
-  password: 'aym*fpm3EMK3hxy0brp',
-  // email: '',
-  // password: '',
+  // email: 'jackson@creatorsinc.com',
+  // password: 'aym*fpm3EMK3hxy0brp',
+  email: '',
+  password: '',
 }
 
 function Login() {
   const navigate = useNavigate()
 
   const [credentials, setCredentials] = useStorage('credentials')
+  const [userInfo, setUserInfo] = useStorage('user')
   const [project] = useStorage('project')
 
   const [isLoading, setIsLoading] = useState(false)
@@ -54,6 +55,8 @@ function Login() {
       } else {
         navigate('/projects')
       }
+
+      setUserInfo(values)
     } catch (error) {
       setError(error?.response?.data?.message || 'Unexpected Error')
     } finally {
