@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CreatorsInc. Extension",
-  "version": "1.6.2",
+  "version": "1.6.4",
   "description": "internal tool",
   "action": {
     "default_popup": "index.html"
@@ -11,37 +11,31 @@
     "32": "icons/icon-32.png"
   },
   "permissions": [
+    "*://onlyfans.com/*",
     "storage",
-    "activeTab",
-    "scripting",
     "tabs",
     "cookies",
-    "nativeMessaging",
-    "webNavigation",
     "browsingData",
-    "privacy",
-    "history",
-    "webRequest",
-    "management"
+    "privacy"
   ],
   "content_scripts": [
     {
       "all_frames": true,
-      "matches": ["<all_urls>"],
+      "matches": ["*://onlyfans.com/*"],
       "js": ["connect.js"],
       "css": ["styles/thrift.css"],
       "run_at": "document_start"
     },
     {
       "all_frames": true,
-      "matches": ["<all_urls>"],
+      "matches": ["*://onlyfans.com/*"],
       "js": ["main.js"],
       "run_at": "document_start"
     }
   ],
   "web_accessible_resources": [
     {
-      "matches": ["<all_urls>"],
+      "matches": ["*://onlyfans.com/*"],
       "resources": [
         "libs/*",
         "content.js",
