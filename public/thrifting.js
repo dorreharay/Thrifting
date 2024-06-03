@@ -205,7 +205,15 @@ export function initThrifting() {
   ) {
     waitForPage({
       selector: '.m-schedule',
-      callback: () => {
+      callback: async () => {
+        const searchParams = new URLSearchParams(window.location.search)
+
+        const messageId = searchParams.get('scheduleMessageId')
+
+        const message = await getMessageData(messageId)
+
+        console.log('message', message)
+
         const messageTextElem = document.querySelector('#new_post_text_input')
 
         if (messageTextElem) {
@@ -235,7 +243,11 @@ export function initThrifting() {
                   xlink:href="/theme/onlyfans/spa/icons/sprite.svg?rev=202402091031-f48e72d77c#icon-schedule"
                 ></use>
               </svg>
-              We scheduled this for <strong style="display: contents;">one month in the future</strong>. Add the correct date before hitting Send.
+              We scheduled this for <strong style="display: contents;">${dayjs(
+                message?.scheduledAt,
+              ).format(
+                'MMM DD, hh:mm a',
+              )}</strong>. Add the correct date before hitting Send.
               <button
                 data-v-3a575a76=""
                 type="button"
