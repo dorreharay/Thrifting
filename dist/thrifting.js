@@ -20,7 +20,7 @@ const version = getExtensionVersion()
 
 const latestVersion = '1.6.2'
 
-const isLatest = () => version === latestVersion
+const isLatest = () => true
 
 const disableOrigination = true
 
@@ -205,7 +205,15 @@ export function initThrifting() {
   ) {
     waitForPage({
       selector: '.m-schedule',
-      callback: () => {
+      callback: async () => {
+        const searchParams = new URLSearchParams(window.location.search)
+
+        const messageId = searchParams.get('scheduleMessageId')
+
+        const message = await getMessageData(messageId)
+
+        console.log('message', message)
+
         const messageTextElem = document.querySelector('#new_post_text_input')
 
         if (messageTextElem) {
@@ -235,7 +243,11 @@ export function initThrifting() {
                   xlink:href="/theme/onlyfans/spa/icons/sprite.svg?rev=202402091031-f48e72d77c#icon-schedule"
                 ></use>
               </svg>
-              We scheduled this for <strong style="display: contents;">one month in the future</strong>. Add the correct date before hitting Send.
+              We scheduled this for <strong style="display: contents;">${dayjs(
+                message?.scheduledAt,
+              ).format(
+                'MMM DD, hh:mm a',
+              )}</strong>. Add the correct date before hitting Send.
               <button
                 data-v-3a575a76=""
                 type="button"
@@ -282,6 +294,53 @@ export function initThrifting() {
             }, 500)
           }
         })
+
+        const insertSelectedExlusionLists = async () => {
+          const searchParams = new URLSearchParams(window.location.search)
+
+          const messageId = searchParams.get('scheduleMessageId')
+
+          const message = await getMessageData(messageId)
+
+          const listIds = message?.excludedLists || []
+
+          const requests = listIds?.map(async listId => {
+            return await getExclusionListById(listId)
+          })
+
+          const results = await Promise.all(requests)
+
+          const sections = document.querySelectorAll(
+            '.b-content-filter__title.g-text-ellipsis.g-text-uppercase.g-semibold.flex-fill-1',
+          )
+
+          if (results?.length && sections) {
+            sections.forEach(el => {
+              if (el.innerText === 'EXCLUDE') {
+                const sectionParent = el.parentNode.parentNode
+
+                const elToInsert = sectionParent.querySelector(
+                  '.b-chats__collapse-section__body',
+                )
+
+                const listContainer = document.createElement('div')
+                listContainer.className = 'thrifting-gaps-inside'
+
+                listContainer.innerHTML = `<span>Automatically selected exclusion lists:</span> <br/> ${results
+                  ?.map(
+                    item =>
+                      `<div class="m-tab-rounded b-tabs__nav__item">${item?.name}</div>`,
+                  )
+                  .join('')}`
+
+                elToInsert.appendChild(listContainer)
+                console.log(elToInsert)
+              }
+            })
+          }
+        }
+
+        insertSelectedExlusionLists()
       },
     })
   }
@@ -850,6 +909,7 @@ const saveThriftLog = async payload => {
         vault_folder_id: payload?.vault_folder_id || '',
         exclusion_list_name: payload?.exclusion_list_name || '',
         extension_version: getExtensionVersion(),
+        original_send_at: currentMessageData?.date,
       },
       {
         withCredentials: true,
@@ -875,6 +935,26 @@ const saveMassMessageLog = async payload => {
 
     const sent_by = await getSentBy()
 
+    const requests = payload?.excludedLists?.map(async listId => {
+      return await getExclusionListById(listId)
+    })
+
+    const results = await Promise.all(requests)
+
+    const { thumb, preview, squarePreview } = payload?.media?.[0] || {}
+
+    const statsPayload = {
+      exclusion_list_length: results?.reduce(
+        (acc, curr) => acc + curr?.usersCount,
+        0,
+      ),
+      thumbnail_url: thumb || preview || squarePreview,
+      number_of_images: payload?.media?.filter(item => item?.type === 'photo')
+        ?.length,
+      number_of_videos: payload?.media?.filter(item => item?.type === 'video')
+        ?.length,
+    }
+
     await axios.post('https://thriftingapi.online/mass-messages', {
       thrift_id: thrift_info?.data?.id || '',
       message: payload?.text || '',
@@ -891,6 +971,7 @@ const saveMassMessageLog = async payload => {
       nr_of_views: payload?.message?.viewedCount || 0,
       nr_of_purchases: payload?.message?.purchasedCount || 0,
       message_id: payload?.id,
+      ...statsPayload,
     })
     chrome.storage.sync.set({ prevDate: payload?.scheduledAt })
     console.log('THRIFT LOG SUCCESS')
@@ -1359,6 +1440,24 @@ const createExclusionList = async name => {
       },
       { headers: authParams },
     )
+
+    return data?.data
+  } catch (error) {
+    console.log('error', error)
+
+    return Promise.reject(error)
+  }
+}
+
+const getExclusionListById = async id => {
+  const url = `/api2/v2/lists/${id}`
+
+  try {
+    const authParams = await getAuthParams(url)
+
+    const data = await axios.get(`https://onlyfans.com${url}`, {
+      headers: authParams,
+    })
 
     return data?.data
   } catch (error) {

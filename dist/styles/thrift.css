@@ -165,6 +165,26 @@ button#thrift-no-exclusion {
   pointer-events: none;
 }
 
+.thrifting-gaps-inside {
+  padding: 0 18px;
+  padding-top: 18px;
+  padding-bottom: 20px;
+  border-top: 1px solid rgba(138, 150, 163, 0.25);
+  background: #f6f7f8;
+  border-bottom: none;
+  border-bottom: 1px solid rgba(138, 150, 163, 0.25);
+  margin-bottom: 10px;
+}
+
+.thrifting-gaps-inside span {
+  display: inline-block;
+  margin-bottom: 10px;
+}
+
+.thrifting-gaps-inside .b-tabs__nav__item {
+  color: #000;
+}
+
 .m-loader {
   font-size: 10px;
   width: 25px;
